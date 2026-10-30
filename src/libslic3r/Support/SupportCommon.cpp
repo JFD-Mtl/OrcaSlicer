@@ -1629,6 +1629,9 @@ void generate_support_toolpaths(
             Fill *filler = filler_interface.get();
             Flow  flow = support_params.first_layer_flow;
             float density = 0.f;
+            // ORCA: The lowest raft interface layers are printed with the support base filament.
+            const bool base_interface = support_layer_id >= slicing_params.base_raft_layers &&
+                support_layer_id < slicing_params.base_raft_layers + support_params.num_raft_base_interface_layers;
             if (support_layer_id == 0) {
                 // Base flange.
                 filler->angle = support_params.raft_angle_1st_layer;
@@ -1640,7 +1643,8 @@ void generate_support_toolpaths(
                 // value that guarantees that all layers are correctly aligned.
                 filler->spacing = support_params.support_material_flow.spacing();
                 assert(! raft_layer.bridging);
-                flow          = Flow(float(support_params.raft_interface_flow.width()), float(raft_layer.height), support_params.raft_interface_flow.nozzle_diameter());
+                const Flow &interface_flow = base_interface ? support_params.support_material_flow : support_params.raft_interface_flow;
+                flow          = Flow(float(interface_flow.width()), float(raft_layer.height), interface_flow.nozzle_diameter());
                 density       = float(support_params.raft_interface_density);
             } else
                 continue;
@@ -1653,7 +1657,7 @@ void generate_support_toolpaths(
                 // Filler and its parameters
                 filler, density,
                 // Extrusion parameters
-                (support_layer_id < slicing_params.base_raft_layers) ? ExtrusionRole::erSupportMaterial : ExtrusionRole::erSupportMaterialInterface, flow,
+                (support_layer_id < slicing_params.base_raft_layers || base_interface) ? ExtrusionRole::erSupportMaterial : ExtrusionRole::erSupportMaterialInterface, flow,
                 // sheath at first layer
                 support_params, support_layer_id == 0, support_layer_id == 0);
         }

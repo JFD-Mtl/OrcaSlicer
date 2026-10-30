@@ -2228,9 +2228,14 @@ Print::ApplyStatus Print::apply(const Model &model, DynamicPrintConfig new_full_
 
         // The tower also turns independent_support_layer_height off, which moves objects above a raft.
         // Re-slice them, as done above when enable_prime_tower is in print_diff.
-        if (std::find(new_changed_keys.begin(), new_changed_keys.end(), "enable_prime_tower") != new_changed_keys.end())
+        // ORCA: independent_support_layer_height sets the raft interface layer height, which moves objects above a raft too.
+        const bool prime_tower_changed = std::find(new_changed_keys.begin(), new_changed_keys.end(), "enable_prime_tower") != new_changed_keys.end();
+        const bool independent_support_layer_height_changed =
+            std::find(new_changed_keys.begin(), new_changed_keys.end(), "independent_support_layer_height") != new_changed_keys.end();
+        if (prime_tower_changed || independent_support_layer_height_changed)
             for (PrintObject *object : m_objects)
-                update_apply_status(object->invalidate_step(posSlice));
+                if (prime_tower_changed || object->config().raft_layers > 0)
+                    update_apply_status(object->invalidate_step(posSlice));
 
         update_apply_status(this->invalidate_step(psGCodeExport));
 

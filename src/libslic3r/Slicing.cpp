@@ -79,12 +79,12 @@ SlicingParameters SlicingParameters::create_from_config(
         object_config.layer_height.value : print_config.initial_layer_print_height.value;
 
     // If object_config.support_filament == 0 resp. object_config.support_interface_filament == 0,
-    // print_config.nozzle_diameter.get_at(size_t(-1)) returns the 0th nozzle diameter,
+    // the per-nozzle lookups return the 0th nozzle's values,
     // which is consistent with the requirement that if support_filament == 0 resp. support_interface_filament == 0,
     // support will not trigger tool change, but it will use the current nozzle instead.
     // In that case all the nozzles have to be of the same diameter.
-    coordf_t support_material_extruder_dmr           = print_config.nozzle_diameter.get_at(object_config.support_filament.value - 1);
-    coordf_t support_material_interface_extruder_dmr = print_config.nozzle_diameter.get_at(object_config.support_interface_filament.value - 1);
+    const coordf_t support_material_max_layer_height           = max_layer_height_from_nozzle(print_config, object_config.support_filament.value);
+    const coordf_t support_material_interface_max_layer_height = max_layer_height_from_nozzle(print_config, object_config.support_interface_filament.value);
 
     // ORCA: store Z distance
     const coordf_t support_top_z_gap    = object_config.support_top_z_distance.value;
@@ -201,13 +201,20 @@ SlicingParameters SlicingParameters::create_from_config(
     /* -------------------------------------------------- */
 
     if (params.base_raft_layers > 0) {
-        params.interface_raft_layers = (params.base_raft_layers + 1) / 2;
-        params.base_raft_layers -= params.interface_raft_layers;
+        // ORCA: The raft interface follows the support top interface count. The raft contact layer is always an interface layer,
+        // and with two or more raft layers the 1st layer stays a base layer.
+        const size_t raft_layers     = params.base_raft_layers;
+        const size_t top_interfaces  = size_t(std::max(1, object_config.support_interface_top_layers.value));
+        params.interface_raft_layers = std::max<size_t>(1, std::min(raft_layers - 1, top_interfaces));
+        params.base_raft_layers      = raft_layers - params.interface_raft_layers;
         // Use as large as possible layer height for the intermediate raft layers.
-        params.base_raft_layer_height       = std::max(params.layer_height, 0.75 * support_material_extruder_dmr);
-        params.interface_raft_layer_height  = std::max(params.layer_height, 0.75 * support_material_interface_extruder_dmr);
+        params.base_raft_layer_height       = std::max(params.layer_height, support_material_max_layer_height);
+        // ORCA: The raft interface follows the support layer heights: as thick as possible with independent support layer height,
+        // otherwise synchronized with the object layer height.
+        params.interface_raft_layer_height  = print_config.independent_support_layer_height ?
+            std::max(params.layer_height, support_material_interface_max_layer_height) : params.layer_height;
         params.first_object_layer_bridging  = false;
-        params.contact_raft_layer_height    = std::max(params.layer_height, 0.75 * support_material_interface_extruder_dmr);
+        params.contact_raft_layer_height    = params.interface_raft_layer_height;
         params.first_object_layer_height    = params.layer_height;
     }
 

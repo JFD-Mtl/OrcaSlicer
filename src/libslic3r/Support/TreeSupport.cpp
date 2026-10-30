@@ -1632,8 +1632,10 @@ void TreeSupport::generate_toolpaths()
         fill_params.density = interface_density;
         fill_params.dont_adjust = true;
 
+        // ORCA: The lowest raft interface layers are printed with the support base filament.
+        const bool base_interface = layer_nr < m_slicing_params.base_raft_layers + m_support_params.num_raft_base_interface_layers;
         fill_expolygons_generate_paths(ts_layer->support_fills.entities, raft_interface_areas,
-            filler_interface, fill_params, erSupportMaterialInterface, support_flow);
+            filler_interface, fill_params, base_interface ? erSupportMaterial : erSupportMaterialInterface, support_flow);
 
         fill_params.density = object_config.raft_first_layer_density * 0.01;
         fill_expolygons_generate_paths(ts_layer->support_fills.entities, raft_base_areas,
