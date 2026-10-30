@@ -67,6 +67,14 @@ struct SupportParameters {
                 // Keep at least one configured layer on the interface filament.
                 this->num_bottom_base_interface_layers = different_support_interface_filament && num_bottom_interface_layers > 1 ? 1 : 0;
             }
+
+            // ORCA: Same for the raft. The raft contact layer always stays on the interface filament.
+            const size_t num_raft_interface_layers = slicing_params.interface_raft_layers;
+            if (slicing_params.zero_gap_interface_raft && soluble_interface_non_soluble_base) {
+                this->num_raft_base_interface_layers = std::min(num_raft_interface_layers / 2, size_t(2));
+            } else {
+                this->num_raft_base_interface_layers = different_support_interface_filament && num_raft_interface_layers > 1 ? 1 : 0;
+            }
 	    }
         this->first_layer_flow = Slic3r::support_material_1st_layer_flow(&object, float(slicing_params.first_print_layer_height));
         this->support_material_flow = Slic3r::support_material_flow(&object, float(slicing_params.layer_height));
@@ -165,7 +173,7 @@ struct SupportParameters {
         this->raft_angle_base       = 0.f;
         this->raft_angle_interface  = 0.f;
         if (slicing_params.base_raft_layers > 1) {
-            assert(slicing_params.raft_layers() >= 4);
+            assert(slicing_params.raft_layers() >= 3);
             // There are all raft layer types (1st layer, base, interface & contact layers) available.
             this->raft_angle_1st_layer  = this->interface_angle;
             this->raft_angle_base       = this->base_angle;
@@ -174,7 +182,7 @@ struct SupportParameters {
                 // Allign the 1st raft interface layer so that the object 1st layer is hatched perpendicularly to the raft contact interface.
                 this->raft_angle_interface += float(0.5 * M_PI);
         } else if (slicing_params.base_raft_layers == 1 || slicing_params.interface_raft_layers > 1) {
-            assert(slicing_params.raft_layers() == 2 || slicing_params.raft_layers() == 3);
+            assert(slicing_params.raft_layers() >= 2);
             // 1st layer, interface & contact layers available.
             this->raft_angle_1st_layer  = this->base_angle;
             this->raft_angle_interface  = this->interface_angle + 0.5 * M_PI;
@@ -237,6 +245,8 @@ struct SupportParameters {
     size_t                  num_top_base_interface_layers;
     // Number of bottom base interface layers.
     size_t                  num_bottom_base_interface_layers;
+    // Number of the lowest raft interface layers printed with the support base filament.
+    size_t                  num_raft_base_interface_layers;
 
     bool                    has_contacts() const { return this->has_top_contacts || this->has_bottom_contacts; }
     bool                    has_interfaces() const { return this->num_top_interface_layers + this->num_bottom_interface_layers > 0; }
