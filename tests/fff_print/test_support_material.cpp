@@ -38,6 +38,7 @@
 // Geometry, so it must follow the headers (pulled in via test_helpers.hpp) that define them.
 #include "libslic3r/Support/SupportParameters.hpp"
 #include "libslic3r/Config.hpp"
+#include "libslic3r/Slicing.hpp"
 #include "libslic3r/Print.hpp"
 
 using namespace Slic3r::Test;
@@ -801,3 +802,54 @@ TEST_CASE("Bottom-only support interface keeps the dense interface density", "[S
     REQUIRE(sp.bottom_interface_density > sp.support_density);
 }
 
+
+// Top Z distance 0 with a non-zero bottom Z distance: the bottom gap is what keeps support clear of vertical
+// walls below an overhang, so it is only dropped when the interface filament is soluble.
+TEST_CASE("Bottom Z distance is kept with a zero top Z distance unless the interface is soluble", "[SupportMaterial][Regression]")
+{
+    const bool soluble = GENERATE(false, true);
+    CAPTURE(soluble);
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict({
+        { "nozzle_diameter",                 "0.4,0.4" },
+        { "filament_soluble",                soluble ? "0,1" : "0,0" },
+        { "layer_height",                    0.2 },
+        { "enable_support",                  1 },
+        { "support_filament",                1 },
+        { "support_interface_filament",      2 },
+        { "support_top_z_distance",          0.0 },
+        { "support_bottom_z_distance",       0.2 },
+        { "support_interface_top_layers",    2 },
+        { "support_interface_bottom_layers", 2 },
+    });
+    PrintConfig       print_config;
+    PrintObjectConfig object_config;
+    print_config.apply(config, true);
+    object_config.apply(config, true);
+    const SlicingParameters params = SlicingParameters::create_from_config(print_config, object_config, 20., { 0, 1 }, Vec3d(1., 1., 1.));
+
+    CHECK(params.zero_gap_interface_top);
+    CHECK(params.zero_gap_interface_bottom == soluble);
+    CHECK_THAT(params.gap_object_support, Catch::Matchers::WithinAbs(soluble ? 0.0 : 0.2, EPSILON));
+}
+
+TEST_CASE("Z overrides X/Y caps the support XY distance at the top Z distance", "[SupportMaterial]")
+{
+    PrintObjectConfig config;
+    config.support_object_xy_distance.value = 0.6;
+    config.support_top_z_distance.value     = 0.3;
+
+    config.top_z_overrides_xy_distance.value = false;
+    CHECK_THAT(resolved_support_object_xy_distance(config), Catch::Matchers::WithinAbs(0.6, EPSILON));
+
+    config.top_z_overrides_xy_distance.value = true;
+    CHECK_THAT(resolved_support_object_xy_distance(config), Catch::Matchers::WithinAbs(0.3, EPSILON));
+
+    // A top Z distance below 0.2 mm still leaves 0.2 mm.
+    config.support_top_z_distance.value = 0.0;
+    CHECK_THAT(resolved_support_object_xy_distance(config), Catch::Matchers::WithinAbs(0.2, EPSILON));
+
+    // Never widens a smaller XY distance.
+    config.support_object_xy_distance.value = 0.05;
+    CHECK_THAT(resolved_support_object_xy_distance(config), Catch::Matchers::WithinAbs(0.05, EPSILON));
+}
