@@ -103,11 +103,17 @@ SlicingParameters SlicingParameters::create_from_config(
         object_config.support_interface_top_layers.value > 0 &&  // Has some top interface layers
         zero_topZ_contact;
 
+    const bool soluble_interface_filament =
+        object_config.support_interface_filament.value > 0 &&
+        print_config.filament_soluble.get_at(object_config.support_interface_filament.value - 1);
+
+    // With a non-soluble interface, the bottom gap follows its own setting even when the top gap is zero: the object
+    // layers inside that gap are what keep the support clear of vertical walls (see trim_support_layers_by_object()).
     const bool zero_gap_interface_bottom =
         (object_config.support_interface_bottom_layers.value < 0  // Negative value means "use same as top"
             ? object_config.support_interface_top_layers.value
             : object_config.support_interface_bottom_layers.value) > 0 &&  // Has some bottom interface layers
-        (support_bottom_z_gap == 0.0 || zero_topZ_contact);
+        (support_bottom_z_gap == 0.0 || (zero_topZ_contact && soluble_interface_filament));
 
     const bool zero_gap_interface_raft =
         raft_z_gap == 0.0 || zero_topZ_contact;

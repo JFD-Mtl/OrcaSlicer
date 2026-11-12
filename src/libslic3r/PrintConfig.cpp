@@ -7359,6 +7359,16 @@ void PrintConfigDef::init_fff_params()
     //Support with too small spacing may touch the object and difficult to remove.
     def->set_default_value(new ConfigOptionFloat(0.2));
 
+    def = this->add("top_z_overrides_xy_distance", coBool);
+    def->label = L("Z overrides X/Y");
+    def->category = L("Support");
+    def->tooltip = L("Use the top Z distance (at least 0.2 mm) as the XY separation between the object and its support "
+                     "when it is smaller than the support/object XY distance. This lets support reach further under overhangs, "
+                     "while the gap to the object is set by the top Z distance. When disabled, the gap always follows "
+                     "the support/object XY distance.");
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionBool(false));
+
     def = this->add("support_angle", coFloat);
     def->label = L("Pattern angle");
     def->category = L("Support");
@@ -7415,7 +7425,7 @@ void PrintConfigDef::init_fff_params()
     def = this->add("support_bottom_z_distance", coFloat);
     def->label = L("Bottom Z distance");
     def->category = L("Support");
-    def->tooltip = L("Z gap between the object and the support bottom. If Support Top Z Distance is 0 and the bottom has interface layers, this value is ignored and the support is printed in direct contact with the object (no gap).");
+    def->tooltip = L("Z gap between the object and the support bottom. If Support Top Z Distance is 0, the bottom has interface layers and the support interface filament is soluble, this value is ignored and the support is printed in direct contact with the object (no gap).");
     def->sidetext = L("mm");	// millimeters, CIS languages need translation
     def->min = 0;
     def->mode = comAdvanced;

@@ -18,6 +18,15 @@
 
 namespace Slic3r {
 
+// Support/object XY distance, or the top Z distance (at least 0.2 mm) when "Z overrides X/Y" is on and that is smaller.
+inline coordf_t resolved_support_object_xy_distance(const PrintObjectConfig &object_config)
+{
+    const coordf_t xy_distance = object_config.support_object_xy_distance.value;
+    return object_config.top_z_overrides_xy_distance ?
+        std::min(xy_distance, std::max(0.2, object_config.support_top_z_distance.value)) :
+        xy_distance;
+}
+
 inline int number_of_support_interface_bottom_layers(const PrintObjectConfig& object_config)
 {
     return object_config.support_interface_bottom_layers.value < 0 ?
@@ -99,7 +108,7 @@ struct SupportParameters {
             external_perimeter_width = std::max(external_perimeter_width, coordf_t(region.flow(object, frExternalPerimeter, slicing_params.layer_height).width()));
             bridge_flow_ratio += region.config().bridge_flow;
         }
-        this->gap_xy = object_config.support_object_xy_distance.value;
+        this->gap_xy = resolved_support_object_xy_distance(object_config);
         this->gap_xy_first_layer = object_config.support_object_first_layer_gap.value;
         bridge_flow_ratio /= object.num_printing_regions();
 

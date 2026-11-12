@@ -1363,6 +1363,7 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionFloatOrPercent,      support_threshold_overlap))
     ((ConfigOptionFloat,               support_object_xy_distance))
     ((ConfigOptionFloat,               support_object_first_layer_gap))
+    ((ConfigOptionBool,                top_z_overrides_xy_distance))
     ((ConfigOptionBool,                support_ironing))
     ((ConfigOptionEnum<InfillPattern>, support_ironing_pattern))
     ((ConfigOptionPercent,             support_ironing_flow))

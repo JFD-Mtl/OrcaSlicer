@@ -2136,6 +2136,8 @@ void TreeSupport::draw_circles()
 
     // Use square support if there are too many nodes per layer because circle support needs much longer time to compute
     // Hower circle support can be printed faster, so we prefer circle for fewer nodes case.
+    // With "Z overrides X/Y", roofs keep the top Z distance from the object instead of the XY distance.
+    const bool z_overrides = m_object_config->top_z_overrides_xy_distance.value;
     const bool SQUARE_SUPPORT = avg_node_per_layer > 200;
     const int  CIRCLE_RESOLUTION = SQUARE_SUPPORT ? 4 : 100; // The number of vertices in each circle.
 
@@ -2377,9 +2379,9 @@ void TreeSupport::draw_circles()
                 //m_object->print()->set_status(65, (boost::format( _u8L("Support: generate polygons at layer %d")) % layer_nr).str());
 
                 // join roof segments
-                roof_areas     = diff_clipped(closing_ex(roof_areas, line_width_scaled), get_collision(false));
+                roof_areas     = diff_clipped(closing_ex(roof_areas, line_width_scaled), get_collision(z_overrides));
                 roof_areas     = intersection_ex(roof_areas, m_machine_border);
-                roof_base_areas = diff_clipped(closing_ex(roof_base_areas, line_width_scaled), get_collision(false));
+                roof_base_areas = diff_clipped(closing_ex(roof_base_areas, line_width_scaled), get_collision(z_overrides));
                 roof_base_areas = intersection_ex(roof_base_areas, m_machine_border);
                 if (!roof_base_areas.empty() && !roof_areas.empty())
                     roof_base_areas = diff_ex(roof_base_areas,
@@ -2387,7 +2389,8 @@ void TreeSupport::draw_circles()
 
                 first_base_roof_area = roof_areas.size();
                 append(roof_areas, std::move(roof_base_areas));
-                roof_1st_layer = diff_clipped(closing_ex(roof_1st_layer, line_width_scaled), get_collision(false));
+                roof_1st_layer = diff_clipped(closing_ex(roof_1st_layer, line_width_scaled),
+                                              z_overrides ? offset_ex(get_collision(true), line_width_scaled / 2) : get_collision(false));
 
                 // roof_1st_layer and roof_areas may intersect, so need to subtract roof_areas from roof_1st_layer
                 roof_1st_layer = diff_ex(roof_1st_layer, ClipperUtils::clip_clipper_polygons_with_subject_bbox(roof_areas,get_extents(roof_1st_layer)));

@@ -164,6 +164,18 @@ if [[ -n "${DEPS_PARALLEL}" ]] && ! [[ "${DEPS_PARALLEL}" =~ ^[1-9][0-9]*$ ]] ; 
     exit 1
 fi
 
+# Refuse to start while another build of this checkout is running, as two builds in the same build folders break each
+# other. The kernel releases the lock when the last process holding it exits, however it exits. The build inside the
+# container is part of the build that started it, so it doesn't take the lock again.
+if [[ -z "${ORCA_BUILD_LOCK_HELD}" ]] && command -v flock >/dev/null 2>&1 ; then
+    exec {BUILD_LOCK_FD}>"${SCRIPT_PATH}/.build_linux.lock"
+    if ! flock -n "${BUILD_LOCK_FD}" ; then
+        echo "Error: another ${SCRIPT_NAME} is already running in ${SCRIPT_PATH}. Wait for it to finish."
+        exit 1
+    fi
+    export ORCA_BUILD_LOCK_HELD=1
+fi
+
 function check_available_memory_and_disk() {
     FREE_MEM_GB=$(free --gibi --total | grep 'Mem' | rev | cut --delimiter=" " --fields=1 | rev)
     MIN_MEM_GB=10
@@ -324,7 +336,7 @@ function ensure_docker_runner_image() {
     fi
 
     build_cmd=(
-        "${container_cli}" build --pull
+        "${container_cli}" build --pull --format docker
         -t "${runner_image}"
         --build-arg "BASE_IMAGE=${base_image}"
         --build-arg "CMAKE_VERSION=${docker_cmake_version}"
@@ -377,6 +389,7 @@ function run_in_docker() {
         -e "HOST_UID=${host_uid}"
         -e "HOST_GID=${host_gid}"
         -e "HOST_USER=${host_user}"
+        -e "ORCA_BUILD_LOCK_HELD=1"
     )
     if [[ -n "${CMAKE_BUILD_PARALLEL_LEVEL}" ]] ; then
         container_env+=( -e "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" )
@@ -388,7 +401,7 @@ function run_in_docker() {
     ensure_docker_runner_image "${container_cli}" "${runner_image}"
 
     printf '%q ' "${container_cli}" run --rm -i \
-        -v "${SCRIPT_PATH}:${container_workspace}" \
+        -v "${SCRIPT_PATH}:${container_workspace}:Z" \
         -w "${container_workspace}" \
         "${container_env[@]}" \
         "${runner_image}" \
@@ -399,7 +412,7 @@ function run_in_docker() {
     fi
 
     "${container_cli}" run --rm -i \
-        -v "${SCRIPT_PATH}:${container_workspace}" \
+        -v "${SCRIPT_PATH}:${container_workspace}:Z" \
         -w "${container_workspace}" \
         "${container_env[@]}" \
         "${runner_image}" \
@@ -435,32 +448,12 @@ function create_builder_user() {
     chmod 0440 /etc/sudoers.d/orcaslicer-builder
 }
 
-create_builder_user
-mkdir -p "${GITHUB_WORKSPACE}/deps/build/destdir"
-chown -R "${HOST_UID}:${HOST_GID}" "${GITHUB_WORKSPACE}/deps/build"
-if [[ -d "${GITHUB_WORKSPACE}/build" ]] ; then
-    chown -R "${HOST_UID}:${HOST_GID}" "${GITHUB_WORKSPACE}/build"
-fi
-if [[ -d "${GITHUB_WORKSPACE}/build-dbg" ]] ; then
-    chown -R "${HOST_UID}:${HOST_GID}" "${GITHUB_WORKSPACE}/build-dbg"
-fi
-if [[ -d "${GITHUB_WORKSPACE}/build-dbginfo" ]] ; then
-    chown -R "${HOST_UID}:${HOST_GID}" "${GITHUB_WORKSPACE}/build-dbginfo"
-fi
 
-sudo -H -u "${HOST_USER}" env \
-    CMAKE_BUILD_PARALLEL_LEVEL="${CMAKE_BUILD_PARALLEL_LEVEL-}" \
-    GITHUB_WORKSPACE="${GITHUB_WORKSPACE}" \
-    ORCA_UPDATER_SIG_KEY="${ORCA_UPDATER_SIG_KEY-}" \
-    bash -c '
-        set -e
-        cd "${GITHUB_WORKSPACE}"
-        if [[ "$#" -gt 0 ]] ; then
-            ./build_linux.sh "$@"
-        else
-            echo "No build steps were requested after container setup."
-        fi
-    ' bash "$@"
+# Under rootless Podman, container root maps to the host user.
+# Build directly without switching to a separate container user.
+if [[ "$#" -gt 0 ]]; then
+    ./build_linux.sh "$@"
+fi
 EOF
 }
 
